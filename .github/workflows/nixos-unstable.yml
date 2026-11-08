@@ -50,7 +50,7 @@ jobs:
           📅 Detected/published: \`$PUBLISHED_AT\`
           🆕 New revision: \`$REVISION\`
           ⬅️ Previous revision: \`$OLD_REVISION\`
-          🔗 https://github.com/NixOS/nixpkgs/commit/$REVISION"
+          🔗 [Commit](https://github.com/NixOS/nixpkgs/commit/$REVISION)   [Status](https://status.nixos.org/)"
 
             curl -fsS -H "Content-Type: application/json" \
               -d "$(jq -n --arg content "$MESSAGE" '{content: $content}')" \
