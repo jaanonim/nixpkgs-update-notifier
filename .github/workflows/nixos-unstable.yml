@@ -1,0 +1,69 @@
+
+name: NixOS Unstable Discord Notifications
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for new NixOS revision
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          URL="https://channels.nixos.org/nixos-unstable/git-revision"
+          REVISION=$(curl -fsSL "$URL" | tr -d '[:space:]')
+
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid revision: $REVISION"
+            exit 1
+          fi
+
+          STATE_FILE="state/last-revision"
+          mkdir -p state
+
+          OLD_REVISION=""
+          if [[ -f "$STATE_FILE" ]]; then
+            OLD_REVISION=$(cat "$STATE_FILE")
+          fi
+
+          if [[ "$REVISION" == "$OLD_REVISION" ]]; then
+            echo "No new revision."
+            exit 0
+          fi
+
+          if [[ -n "$OLD_REVISION" ]]; then
+            PUBLISHED_AT=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            MESSAGE="🚀 **NixOS unstable updated!**
+          📅 Detected/published: \`$PUBLISHED_AT\`
+          🆕 New revision: \`$REVISION\`
+          ⬅️ Previous revision: \`$OLD_REVISION\`
+          🔗 https://github.com/NixOS/nixpkgs/commit/$REVISION"
+
+            curl -fsS -H "Content-Type: application/json" \
+              -d "$(jq -n --arg content "$MESSAGE" '{content: $content}')" \
+              "$DISCORD_WEBHOOK_URL"
+          else
+            echo "First run: recording initial revision."
+          fi
+
+          echo "$REVISION" > "$STATE_FILE"
+
+      - name: Save revision state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/last-revision
+          git diff --cached --quiet || {
+            git commit -m "Update NixOS unstable revision"
+            git push
+          }
